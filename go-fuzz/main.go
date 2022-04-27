@@ -20,10 +20,10 @@ import (
 	"golang.org/x/tools/go/packages"
 )
 
-//go:generate go build github.com/dvyukov/go-fuzz/go-fuzz/vendor/github.com/elazarl/go-bindata-assetfs/go-bindata-assetfs
-//go:generate ./go-bindata-assetfs assets/...
+//go:generate go get -u github.com/elazarl/go-bindata-assetfs/...
+//go:generate go get -u github.com/go-bindata/go-bindata/...
+//go:generate go-bindata-assetfs assets/...
 //go:generate goimports -w bindata_assetfs.go
-//go:generate rm go-bindata-assetfs
 
 var (
 	flagWorkdir           = flag.String("workdir", ".", "dir with persistent work data")
@@ -100,8 +100,8 @@ func main() {
 			// Try the default. Best effort only.
 			var bin string
 			cfg := new(packages.Config)
-			// Note that we do not set GO111MODULE here in order to respect any GO111MODULE 
-			// setting by the user as we are finding dependencies. See modules support 
+			// Note that we do not set GO111MODULE here in order to respect any GO111MODULE
+			// setting by the user as we are finding dependencies. See modules support
 			// comments in go-fuzz-build/main.go for more details.
 			cfg.Env = os.Environ()
 			pkgs, err := packages.Load(cfg, ".")
