@@ -169,23 +169,27 @@ func workerMain() {
 func (w *Worker) loop() {
 	iter, fuzzSonarIter, versifierSonarIter := 0, 0, 0
 	for atomic.LoadUint32(&shutdown) == 0 {
+		tmpRo := w.hub.ro.Load().(*ROData)
+		logPrintf("[worker] id: %d, triage queue: %v, corpus: %v\n",
+			w.id, len(w.triageQueue), len(tmpRo.corpus))
+
 		if len(w.crasherQueue) > 0 {
 			n := len(w.crasherQueue) - 1
 			crash := w.crasherQueue[n]
 			w.crasherQueue[n] = NewCrasherArgs{}
 			w.crasherQueue = w.crasherQueue[:n]
-			if *flagV >= 2 {
-				log.Printf("worker %v processes crasher [%v]%v", w.id, len(crash.Data), hash(crash.Data))
-			}
+			logPrintf("[worker] id: %v, processes crasher [%v]%v",
+				w.id, len(crash.Data), hash(crash.Data))
+
 			w.processCrasher(crash)
 			continue
 		}
 
 		select {
 		case input := <-w.hub.triageC:
-			if *flagV >= 2 {
-				log.Printf("worker %v triages coordinator input [%v]%v minimized=%v smashed=%v", w.id, len(input.Data), hash(input.Data), input.Minimized, input.Smashed)
-			}
+			logPrintf("[worker] id: %v, triage coordinator input [%v]%v minimized=%v smashed=%v\n",
+				w.id, len(input.Data), hash(input.Data), input.Minimized, input.Smashed)
+
 			w.triageInput(input)
 			for {
 				x := atomic.LoadUint32(&w.hub.initialTriage)
@@ -202,6 +206,7 @@ func (w *Worker) loop() {
 			// Wait until they finish, otherwise we can generate
 			// as if new interesting inputs that are not actually new
 			// and thus unnecessary inflate corpus on every run.
+			logPrintf("[worker] id: %v, sleep for initial triage\n", w.id)
 			time.Sleep(100 * time.Millisecond)
 			continue
 		}
@@ -211,14 +216,16 @@ func (w *Worker) loop() {
 			input := w.triageQueue[n]
 			w.triageQueue[n] = CoordinatorInput{}
 			w.triageQueue = w.triageQueue[:n]
-			if *flagV >= 2 {
-				log.Printf("worker %v triages local input [%v]%v minimized=%v smashed=%v", w.id, len(input.Data), hash(input.Data), input.Minimized, input.Smashed)
-			}
+			logPrintf("[worker] id: %v, triage local input [%v]%v minimized=%v smashed=%v",
+				w.id, len(input.Data), hash(input.Data), input.Minimized, input.Smashed)
 			w.triageInput(input)
 			continue
 		}
 
 		ro := w.hub.ro.Load().(*ROData)
+
+		logPrintf("[worker] id: %v, start mutate, corpus: %v\n",
+			w.id, len(ro.corpus))
 		if len(ro.corpus) == 0 {
 			// Some other worker triages corpus inputs.
 			time.Sleep(100 * time.Millisecond)
@@ -227,6 +234,8 @@ func (w *Worker) loop() {
 
 		// 9 out of 10 iterations are random fuzzing.
 		iter++
+		logPrintf("[worker] id: %v, mutating, iteration: %v, verse: %v\n",
+			w.id, iter, ro.verse)
 		if iter%10 != 0 || ro.verse == nil {
 			data, depth := w.mutator.generate(ro)
 			// Every 1000-th iteration goes to sonar.
@@ -623,6 +632,8 @@ func (w *Worker) noteNewInput(data, cover []byte, res, depth int, typ execType) 
 }
 
 func (w *Worker) noteCrasher(data, output []byte, hanged bool) {
+	logPrintf("[worker] noteCrasher: id: %v, put into crasher queue, hanged: %v\n",
+		w.id, hanged)
 	ro := w.hub.ro.Load().(*ROData)
 	supp := extractSuppression(output)
 	if _, ok := ro.suppressions[hash(supp)]; ok {

@@ -37,6 +37,8 @@ func (m *Mutator) randByteOrder() binary.ByteOrder {
 }
 
 func (m *Mutator) generate(ro *ROData) ([]byte, int) {
+	logPrintf("[mutator] generate, corpus: %v\n", len(ro.corpus))
+
 	corpus := ro.corpus
 	scoreSum := corpus[len(corpus)-1].runningScoreSum
 	weightedIdx := m.rand(scoreSum)

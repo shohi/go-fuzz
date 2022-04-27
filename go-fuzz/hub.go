@@ -147,6 +147,10 @@ func (hub *Hub) connect() error {
 	hub.id = res.ID
 	hub.initialTriage = uint32(len(res.Corpus))
 	hub.triageQueue = res.Corpus
+
+	logPrintf("[hub] newHub: initial triage count: %v, queue: %v\n",
+		hub.initialTriage, len(hub.triageQueue))
+
 	return nil
 }
 
@@ -157,6 +161,8 @@ func (hub *Hub) loop() {
 
 	syncTicker := time.NewTicker(syncPeriod).C
 	for {
+		logPrintf("[hub] loop: triage queue: %v\n", len(hub.triageQueue))
+
 		if len(hub.triageQueue) > 0 && triageC == nil {
 			n := len(hub.triageQueue) - 1
 			triageInput = hub.triageQueue[n]
@@ -202,6 +208,7 @@ func (hub *Hub) loop() {
 			}
 
 		case triageC <- triageInput:
+			logPrintf("[hub] loop: send triage input")
 			// Send new input to workers for triage.
 			if len(hub.triageQueue) > 0 {
 				n := len(hub.triageQueue) - 1
@@ -219,6 +226,7 @@ func (hub *Hub) loop() {
 			hub.stats.restarts += s.restarts
 
 		case input := <-hub.newInputC:
+			logPrintf("[hub] loop: get new input, mine: %v", input.mine)
 			// New interesting input from workers.
 			ro := hub.ro.Load().(*ROData)
 			if !compareCover(ro.corpusCover, input.cover) {
@@ -230,9 +238,8 @@ func (hub *Hub) loop() {
 			}
 
 			// Passed deduplication, taking it.
-			if *flagV >= 2 {
-				log.Printf("hub received new input [%v]%v mine=%v", len(input.data), hash(input.data), input.mine)
-			}
+			logPrintf("[hub] received new input [%v]%v mine=%v", len(input.data), hash(input.data), input.mine)
+
 			hub.corpusSigs[sig] = struct{}{}
 			ro1 := new(ROData)
 			*ro1 = *ro
@@ -269,6 +276,9 @@ func (hub *Hub) loop() {
 			}
 
 		case crash := <-hub.newCrasherC:
+			logPrintf("[hub] get new crash, hanging: %v, enabled dup: %v\n",
+				crash.Hanging, *flagDup)
+
 			// New crasher from workers. Woohoo!
 			if crash.Hanging || !*flagDup {
 				ro := hub.ro.Load().(*ROData)
@@ -291,7 +301,7 @@ func (hub *Hub) loop() {
 				hub.ro.Store(ro1)
 			}
 			if err := hub.coordinator.Call("Coordinator.NewCrasher", crash, nil); err != nil {
-				log.Printf("new crasher call failed: %v", err)
+				log.Printf("[hub] new crasher call failed: %v\n", err)
 			}
 		}
 	}

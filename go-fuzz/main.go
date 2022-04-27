@@ -5,6 +5,7 @@ package main
 
 import (
 	"flag"
+	"fmt"
 	"log"
 	"net"
 	"os"
@@ -25,6 +26,10 @@ import (
 //go:generate go-bindata-assetfs assets/...
 //go:generate goimports -w bindata_assetfs.go
 
+const (
+	version = "0.1.1"
+)
+
 var (
 	flagWorkdir           = flag.String("workdir", ".", "dir with persistent work data")
 	flagProcs             = flag.Int("procs", runtime.NumCPU(), "parallelism level")
@@ -42,6 +47,7 @@ var (
 	flagSonar             = flag.Bool("sonar", true, "use sonar hints")
 	flagV                 = flag.Int("v", 0, "verbosity level")
 	flagHTTP              = flag.String("http", "", "HTTP server listen address (coordinator mode only)")
+	flagVersion           = flag.Bool("version", false, "go-fuzz version info")
 
 	shutdown        uint32
 	shutdownC       = make(chan struct{})
@@ -50,6 +56,12 @@ var (
 
 func main() {
 	flag.Parse()
+
+	if *flagVersion {
+		fmt.Printf("go-fuzz version: %v\n", version)
+		return
+	}
+
 	if *flagCoordinator != "" && *flagWorker != "" {
 		log.Fatalf("both -coordinator and -worker are specified")
 	}
@@ -131,4 +143,10 @@ func expandHomeDir(path string) string {
 		path = filepath.Join(usr.HomeDir, path[2:])
 	}
 	return path
+}
+
+func logPrintf(format string, args ...interface{}) {
+	if *flagV >= 2 {
+		log.Printf(format, args...)
+	}
 }
